@@ -1,0 +1,14 @@
+[build-system]
+requires = ["setuptools>=65"]
+build-backend = "setuptools.build_meta"
+[project]
+name = "agent-gate-bench"
+version = "0.1.0"
+description = "Local trusted adapter policy evaluation"
+requires-python = ">=3.11"
+license = {text = "MIT"}
+authors = [{name = "walker512"}]
+[project.scripts]
+agent-gate-bench = "agent_gate_bench.__main__:main"
+[tool.setuptools.packages.find]
+include = ["agent_gate_bench*"]
