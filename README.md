@@ -2,7 +2,7 @@
 
 **Run a trusted local agent adapter, and separate policy failure from task failure and execution error.**
 
-A small, extensible pre-execution proposal test harness: each case launches a real external Python adapter, supplies a user task plus untrusted text, and checks the returned tool proposals and final response against independently stored expectations. The harness does **not execute returned tools**. It can catch a proposed unauthorized recipient/action and also catch a “safe” adapter that merely refuses the legitimate task.
+A small, extensible pre-execution proposal test harness: each case launches a real external Python adapter, supplies a user task plus untrusted text, and checks the returned tool proposals and final response against independently stored expectations. The original proposal mode does **not execute returned tools**; the optional local-effects mode below now dispatches a fixed synthetic tool set. It can catch a proposed unauthorized recipient/action and also catch a “safe” adapter that merely refuses the legitimate task.
 
 This is one core of an external agent evaluation lab, not a general autonomous-agent environment. It evaluates what an adapter returns, **not every action the adapter actually performs**. No real LLM/remote agent was evaluated for this release. The bundled deterministic adapters are deliberately illustrative, not security products or evidence of model robustness.
 
@@ -10,7 +10,7 @@ This is one core of an external agent evaluation lab, not a general autonomous-a
 
 `run` executes your **trusted standalone Python code with your user account's authority**. It is **NOT a security sandbox**. A temporary working directory, reduced environment, `python -I`, time limit and pipe limits do not prevent filesystem access, networking, subprocesses, side effects or credential access through other sources. Run only code you have reviewed and are authorized to execute. Do not point this at hostile software. Use an independently provisioned restricted environment for unfamiliar adapters; this tool does not create one.
 
-The bundled examples make no network requests, read no credentials and execute no proposed tools. This release does not accept an external HTTP target URL or automatically attack any service. Adapters can wrap installed local application libraries, but any real integration, credentials, permissions, side effects and provider charges are your responsibility; none was tested here. Do not use production data for synthetic regression exercises.
+The original proposal examples make no network requests, read no credentials and execute no proposed tools. The new effects examples dispatch only fixed local synthetic tools; trusted adapter code itself remains unrestricted. This release does not accept an external HTTP target URL or automatically attack any service. Adapters can wrap installed local application libraries, but any real integration, credentials, permissions, side effects and provider charges are your responsibility; none was tested here. Do not use production data for synthetic regression exercises.
 
 ## Quick start
 
@@ -87,10 +87,23 @@ Source leaf symlinks/FIFOs/devices are refused, bounded reads are used, and inpu
 
 [Promptfoo](https://www.promptfoo.dev/docs/red-team/agents/) supports richer agent red-teaming, custom providers and trajectory-based evaluation; [AgentDojo](https://github.com/sequrity-ai/agentdojo) provides dynamic prompt-injection environments; [garak](https://github.com/NVIDIA/garak) covers many model vulnerability probes. Consult them for broader integrations and threat coverage.
 
-This project is a local explicit-proposal protocol and a portable deterministic gate, not a replacement for those systems. No competitor was run for this release; primary documentation was read, and **no exclusive feature, superiority, speed, security or real-agent robustness advantage is claimed**. It differs from static config checks and saved-log diagnosis by actually invoking a supplied local adapter, but does not yet validate native agent trace completeness or real tool effects. No upstream code or attack dataset is bundled.
+This project is a local explicit-proposal protocol and a portable deterministic gate, not a replacement for those systems. No competitor was run for this release; primary documentation was read, and **no exclusive feature, superiority, speed, security or real-agent robustness advantage is claimed**. It differs from static config checks and saved-log diagnosis by actually invoking a supplied local adapter, but does not validate native agent trace completeness. The optional effects mode below adds actual synthetic local-store tool effects, not production service validation. No upstream code or attack dataset is bundled.
 
 ## Tests and license
 
-32 public tests passed on Linux / Python 3.12, zero skipped: actual external adapter execution, stdin, environment omission, timeout, bounded stdout/stderr, same-group inherited-pipe cleanup, invalid protocol, exact policy and utility checks, no-execution permission gate, receipt tampering, error-not-pass handling, FIFO/symlink handling and CLI exit codes. Tests run only original synthetic code, no LLM/network requests. Runner tests are explicitly skipped on non-POSIX; no new hosted CI, macOS, Windows or real-user validation is claimed.
+The original proposal mode had 32 tests; the rebuilt 0.2.0 suite now has **57 tests passing on Linux / Python 3.12, zero skipped**: actual external adapter execution, stdin, environment omission, timeout, bounded stdout/stderr, same-group inherited-pipe cleanup, invalid protocol, exact policy and utility checks, no-execution permission gate, receipt tampering, error-not-pass handling, FIFO/symlink handling and CLI exit codes. Tests run only original synthetic code, no LLM/network requests. Runner tests are explicitly skipped on non-POSIX; no new hosted CI, macOS, Windows or real-user validation is claimed.
 
 MIT, copyright walker512. All included cases and adapters are original synthetic examples.
+
+## Actual multi-turn local tool effects (0.2.0)
+
+[Local tool effects](docs/LOCAL_TOOL_EFFECTS.md) adds bounded multi-turn adapter execution, exact per-call use grants, real on-disk synthetic record/note/outbox operations, tool-return interventions and offline transition replay. A blocked unauthorized attempt is distinct from useful task completion; refusal and a hardcoded final answer cannot stand in for required executed calls.
+
+```sh
+python -m agent_gate_bench.effects run examples/effects_suite.json --adapter examples/effects_reference.py --out local-reference --allow-execute
+python -m agent_gate_bench.effects verify local-reference
+```
+
+The reference fixture passes all six cases. The deliberately vulnerable fixture passes four and fails two while the local outbox remains within its exact grants. These are deterministic synthetic fixtures, **not a tested LLM defense or security sandbox**. Built-in send_message only appends local JSON; trusted adapters can independently use OS/network privileges. No external message is sent by the built-in tool.
+
+Independent [release audit](docs/EFFECTS_AUDIT.md): fresh wheel installed in a new environment outside the source checkout reproduced reference 6/6 and vulnerable 4 pass / 2 fail; both vulnerable run and offline verify returned exit 3. Output directories were mode 0700. Windows execution, hosted CI, real LLMs and production tools were not validated for this release.
