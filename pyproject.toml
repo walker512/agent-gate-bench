@@ -3,7 +3,7 @@ requires = ["setuptools>=65"]
 build-backend = "setuptools.build_meta"
 [project]
 name = "agent-gate-bench"
-version = "0.2.0"
+version = "0.2.1"
 description = "Local trusted adapter policy evaluation"
 requires-python = ">=3.11"
 license = {text = "MIT"}

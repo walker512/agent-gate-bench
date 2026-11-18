@@ -107,3 +107,29 @@ python -m agent_gate_bench.effects verify local-reference
 The reference fixture passes all six cases. The deliberately vulnerable fixture passes four and fails two while the local outbox remains within its exact grants. These are deterministic synthetic fixtures, **not a tested LLM defense or security sandbox**. Built-in send_message only appends local JSON; trusted adapters can independently use OS/network privileges. No external message is sent by the built-in tool.
 
 Independent [release audit](docs/EFFECTS_AUDIT.md): fresh wheel installed in a new environment outside the source checkout reproduced reference 6/6 and vulnerable 4 pass / 2 fail; both vulnerable run and offline verify returned exit 3. Output directories were mode 0700. Windows execution, hosted CI, real LLMs and production tools were not validated for this release.
+
+
+## 0.2.1: private evidence and cancellation
+
+New proposal and effects bundles are created with POSIX directories 0700 and
+files 0600, including under umask 022/000. Existing outputs are refused, not
+rewritten or chmod-repaired. Protect older evidence manually before using a
+shared account or shared machine. These modes are not a Windows ACL guarantee;
+parent directories, the same OS user and privileged administrators remain outside
+this protection boundary. No confidentiality from trusted adapter code is implied.
+
+During adapter execution, SIGINT/SIGTERM now trigger process-group termination,
+direct-child reaping and temporary-directory cleanup, including cancellation
+between process creation and return of its handle. Both CLI modes return
+128 + signal number. The runner requires the main thread to install temporary
+signal handlers, restores previous handlers and does not alter the parent umask.
+The child gets umask 077. Repeated cancellation is suppressed while cleanup runs.
+SIGKILL, power loss, escaped process groups, uninterruptible OS calls and cleanup
+errors are not guaranteed; this is not a sandbox, rollback or secure erasure.
+A signal outside active adapter execution may still use the caller's normal
+signal behavior; incomplete evidence is not a successful run.
+
+Regression command: `python -m unittest discover -s tests -v`.
+The patch adds real process cancellation (both CLIs, SIGINT/SIGTERM), the spawn
+handle race, private output checks, existing/symlink refusal, handler restoration,
+parent-umask preservation and non-main-thread refusal tests.
