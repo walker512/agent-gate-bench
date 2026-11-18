@@ -1,6 +1,7 @@
 """Multi-turn trusted-adapter evaluation with actual synthetic JSON-store tools.
 Built-in tools use only local synthetic files. Trusted adapters can access the network; no sandbox or real-LLM safety claim.
 """
+from .lifecycle import Cancelled
 import argparse
 import copy
 import json
@@ -305,7 +306,7 @@ def run(suite_path, adapter_path, out, allow_execute=False, timeout=3, turns=6):
         raise core.Invalid('Serialized evidence cannot reproduce the report.')
     dest.mkdir(mode=0o700, exist_ok=False)
     for name, value in products.items():
-        with (dest/name).open('xb') as f:
+        with open(dest/name,'xb',opener=lambda path,flags:os.open(path,flags,0o600)) as f:
             f.write(value)
     return result
 
@@ -334,6 +335,8 @@ def main():
         result = verify(args.bundle) if args.cmd == 'verify' else run(args.suite, args.adapter, args.out, args.allow_execute, args.timeout, args.max_turns)
         print(json.dumps(result, sort_keys=True))
         return 0 if result['status'] == 'pass' else 3
+    except Cancelled as e:
+        return 128+e.signum
     except (core.Invalid, OSError, ValueError, TypeError, KeyError, RecursionError):
         print('Effects validation/execution failed; inputs and private paths are not echoed.', file=sys.stderr); return 2
 

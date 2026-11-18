@@ -2,9 +2,14 @@
 import os, selectors, signal, subprocess, sys, tempfile, time
 from pathlib import Path
 from .core import *
+from .lifecycle import cancellation, Cancelled
 CAP=256*1024
 
 def execute(script,request,timeout):
+    with cancellation() as state:
+        return _execute(script,request,timeout,state)
+
+def _execute(script,request,timeout,state):
     if os.name!='posix':raise Invalid('Execution currently supports POSIX only; verification is portable.')
     integer(timeout,1,10)
     with tempfile.TemporaryDirectory(prefix='agent-gate-') as td:
@@ -12,18 +17,27 @@ def execute(script,request,timeout):
         with tempfile.TemporaryFile() as source:
             source.write(canonical(request));source.seek(0)
             env={'PATH':os.defpath,'LANG':'C.UTF-8'}
-            p=subprocess.Popen([sys.executable,'-I',str(path)],stdin=source,stdout=subprocess.PIPE,stderr=subprocess.PIPE,cwd=td,env=env,start_new_session=True)
+            p=None
             stdout=bytearray();stderr=bytearray();status=None;deadline=time.monotonic()+timeout
             def stop():
-                try:os.killpg(p.pid,signal.SIGKILL)
-                except ProcessLookupError:pass
+                if p is not None:
+                    try:os.killpg(p.pid,signal.SIGKILL)
+                    except ProcessLookupError:pass
             try:
+                state['spawning']=True
+                try:
+                    p=subprocess.Popen([sys.executable,'-I',str(path)],stdin=source,stdout=subprocess.PIPE,stderr=subprocess.PIPE,cwd=td,env=env,start_new_session=True,umask=0o077)
+                finally:
+                    state['spawning']=False
+                if state['signal'] is not None:
+                    state['cleaning']=True
+                    raise Cancelled(state['signal'])
                 with selectors.DefaultSelector() as sel:
                     for f,buffer in ((p.stdout,stdout),(p.stderr,stderr)):
                         os.set_blocking(f.fileno(),False);sel.register(f,selectors.EVENT_READ,buffer)
                     while sel.get_map() or p.poll() is None:
                         if time.monotonic()>=deadline:status='timeout';break
-                        if p.poll() is not None:stop() # close inherited pipes from same-group children
+                        if p.poll() is not None:stop()
                         for key,_ in sel.select(min(.05,max(0,deadline-time.monotonic()))):
                             chunk=os.read(key.fileobj.fileno(),8192)
                             if not chunk:sel.unregister(key.fileobj);continue
@@ -32,7 +46,15 @@ def execute(script,request,timeout):
                             if len(chunk)>available:status='output_limit';break
                         if status:break
             finally:
-                stop();p.wait(timeout=2);p.stdout.close();p.stderr.close()
+                state['cleaning']=True
+                stop()
+                if p is not None:
+                    p.wait(timeout=2)
+                    p.stdout.close();p.stderr.close()
+            state['cleaning']=False
+            if state['signal'] is not None:
+                state['cleaning']=True
+                raise Cancelled(state['signal'])
             code=p.returncode;res=None
             if status is None:
                 if code!=0:status='nonzero_exit'
@@ -52,6 +74,8 @@ def run(suite_path,adapter_path,out,allow_execute=False,timeout=3):
     r=report(suite,receipt,raw)
     data={'suite.json':raw,'receipt.json':canonical(receipt),'report.json':canonical(r),'review.md':review(r)}
     if any(len(v)>OUTPUT_LIMIT for v in data.values()):raise Invalid('Generated bundle file too large.')
-    Path(out).mkdir(exist_ok=False)
-    for name,v in data.items():(Path(out)/name).write_bytes(v)
+    Path(out).mkdir(mode=0o700,exist_ok=False)
+    for name,v in data.items():
+        with open(Path(out)/name,'xb',opener=lambda path,flags:os.open(path,flags,0o600)) as f:
+            f.write(v)
     return r

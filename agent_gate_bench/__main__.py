@@ -1,3 +1,4 @@
+from .lifecycle import Cancelled
 import argparse,json,sys
 from .core import Invalid,verify
 from .runner import run
@@ -12,6 +13,7 @@ def main():
         result=run(a.suite,a.adapter,a.out,a.allow_execute,a.timeout) if a.command=='run' else verify(a.bundle)
         print(json.dumps({'consistent':True,'status':result['status'],'counts':result['counts']},sort_keys=True))
         return 3 if a.require_pass and result['status']!='pass' else 0
+    except Cancelled as e:return 128+e.signum
     except Invalid as e:print('Invalid: '+str(e),file=sys.stderr);return 2
     except (OSError,ValueError,OverflowError,subprocess.SubprocessError):print('Operational error; no input or paths are echoed.',file=sys.stderr);return 2
 import subprocess
