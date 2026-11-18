@@ -133,3 +133,12 @@ Regression command: `python -m unittest discover -s tests -v`.
 The patch adds real process cancellation (both CLIs, SIGINT/SIGTERM), the spawn
 handle race, private output checks, existing/symlink refusal, handler restoration,
 parent-umask preservation and non-main-thread refusal tests.
+
+## Offline before/after evidence comparison
+
+[Recorded-run comparison](docs/RUN_COMPARISON.md) re-verifies two bundles and
+compares safety, task utility and execution outcomes separately. Only exact-suite
+schema 2 evidence with matching declared environment and limits is comparable;
+legacy proposal bundles lacking initial-state/grant evidence remain incomparable.
+The comparison and its verification never execute an adapter. This does not
+prove historical execution, actual environment equality or real-agent security.
